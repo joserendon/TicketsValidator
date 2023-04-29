@@ -1,0 +1,65 @@
+﻿@page "/tickets/edit/{Id:guid}" 
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+ 
+<h3>Marcar Entrada</h3>
+
+@if (ticket is null)
+{
+    <div class="spinner" />
+}
+else
+{
+    <TicketForm @ref="ticketForm" Ticket="ticket" OnValidSubmit="EditAsync" ReturnAction="Return" />
+}
+
+@code {
+    private Ticket? ticket;
+    private TicketForm? ticketForm;
+
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var responseHttp = await repository.Get<Ticket>($"/api/tickets/{Id}");
+        if (responseHttp.Error)
+        {
+            if (responseHttp.HttpResponseMessage.StatusCode == HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/");
+                return;
+            }
+
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        ticket = responseHttp.Response;
+    }
+
+    private async Task EditAsync()
+    {
+        var responseHttp = await repository.Put("/api/tickets", ticket);
+        if (responseHttp.Error)
+        {
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    private void Return()
+    {
+        ticketForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/");
+    }
+}

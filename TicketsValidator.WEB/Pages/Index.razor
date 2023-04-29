@@ -1,0 +1,106 @@
+﻿@page "/"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<h3>Validador de Boletas!</h3>
+<NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigation" />
+<EditForm EditContext="editContext" OnValidSubmit="@OnValidTicketSubmit">
+    <DataAnnotationsValidator />
+    <div class="mb-3">
+        <label>Boleto:</label>
+        <div>
+            <InputText class="form-control" @bind-Value:get="@TicketValidator.Id" @bind-Value:set="SetTicket" />
+        </div>
+
+        <ValidationMessage For="@(() => TicketValidator.Id)" />
+    </div>
+
+    <button class="btn btn-primary" type="submit">Guardar Cambios</button>
+    <button type="button" class="btn btn-success" @onclick="()=> this.TicketValidator = new TicketValidatorDTO()">Limpiar</button>
+</EditForm>
+@code {
+    [CascadingParameter]
+    IModalService Modal { get; set; } = default!;
+
+    private EditContext editContext = null!;
+
+    private TicketValidatorDTO TicketValidator { get; set; } = new();
+
+    private bool FormPostedSuccessfully { get; set; }
+
+    private Guid _TicketId { get; set; }
+
+    protected override void OnInitialized()
+    {
+        editContext = new(TicketValidator);
+    }
+
+    private async Task OnValidTicketSubmit()
+    {
+        var ticketId = TicketValidator.Id;
+        var responseHttp = await repository.Get<Ticket>($"/api/tickets/{ticketId}");
+        if (responseHttp.Error)
+        {
+            if (responseHttp.HttpResponseMessage.StatusCode == HttpStatusCode.Forbidden)
+            {
+                navigationManager.NavigateTo("/");
+                return;
+            }
+
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        var modalReference = Modal.Show<TicketEdit>(string.Empty, new ModalParameters().Add("Id", _TicketId!));
+
+
+        var result = await modalReference.Result;
+        if (result.Confirmed)
+        {
+            await sweetAlertService.FireAsync("Éxito", "Entrada realizada correctamente", SweetAlertIcon.Success);
+        }
+    }
+    private Task SetTicket(string value)
+    {
+        if (!Guid.TryParse(value, out Guid ticketId))
+        {
+            navigationManager.NavigateTo("/");
+
+            sweetAlertService.FireAsync("Error", "Boleta no válida", SweetAlertIcon.Error);
+            return Task.CompletedTask;
+        }
+        TicketValidator.Id = ticketId.ToString();
+        _TicketId = ticketId;
+        return Task.CompletedTask;
+    }
+
+    private async Task OnBeforeInternalNavigation(LocationChangingContext context)
+    {
+        var formWasMofied = editContext.IsModified();
+        if (!formWasMofied || FormPostedSuccessfully)
+        {
+            return;
+        }
+
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmación",
+                Text = "¿Deseas abandonar la página y perder los cambios?",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                CancelButtonText = "No",
+                ConfirmButtonText = "Si"
+            });
+
+        var confirm = !string.IsNullOrEmpty(result.Value);
+        if (confirm)
+        {
+            return;
+        }
+
+        context.PreventNavigation();
+    }
+}
+

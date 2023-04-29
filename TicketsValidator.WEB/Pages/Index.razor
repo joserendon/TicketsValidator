@@ -2,8 +2,7 @@
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
-
-<h3>Validador de Boletas!</h3>
+ 
 <NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigation" />
 <EditForm EditContext="editContext" OnValidSubmit="@OnValidTicketSubmit">
     <DataAnnotationsValidator />
